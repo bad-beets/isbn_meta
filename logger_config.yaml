@@ -1,0 +1,38 @@
+version: 1
+formatters:
+  brief:
+    format: '%(message)s'
+  default:
+    format: '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+    datefmt: '%m/%d/%Y %H:%M:%S:'
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: brief
+    stream: ext://sys.stdout
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: default
+    filename: isbn_meta.log
+    maxBytes: 2048
+    backupCount: 13
+  email:
+    class: logging.handlers.SMTPHandler
+    mailhost: localhost
+    fromaddr: isbn_meta@host.tld
+    toaddrs:
+      - support@host.tld
+      - dev@host.tld
+    subject: hi there. a fresh report transmission for you.
+loggers:
+  elegant:
+    level: DEBUG
+    handlers: [console]
+  default:
+    level: DEBUG
+    handlers: [file]
+  full_robot:
+    level: DEBUG
+    handlers: [file, email]
