@@ -1,0 +1,11 @@
+Gets the replace_me of an ISBN from metadata API sources
+
+Parameters
+----------
+isbn : str
+   The ISBN of the work
+
+Returns
+-------
+dict
+    a dictionary of replace_me data from each API searched
