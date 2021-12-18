@@ -1,7 +1,7 @@
 import os
 import configparser
 
-cfg = configparser.ConfigParser(os.environ)
+cfg: configparser.ConfigParser = configparser.ConfigParser(os.environ)
 cfg.read('config.ini')
 
 assert cfg['gobo_params']['key'], 'Google Books API Key required.'

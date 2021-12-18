@@ -1,32 +1,35 @@
 import metric
 import functools
 import requests
+import configparser
 import load_config
 from pathlib import Path
 from typing import List, Dict, Optional
 from typing import Callable
 
-cfg: dict = load_config.cfg
+cfg: configparser.ConfigParser = load_config.cfg
 
 
-def key_swallow(f: Callable[[str], dict]) -> Callable[[str], dict]:
+def key_swallow(f: Callable[[str],
+                            Optional[dict]]) -> Callable[[str],
+                                                         Optional[dict]]:
     """Wraps an API call function in order to eat KeyErrors
 
     This is used as a decorator throughout get.py
 
     Parameters
     ----------
-    f : function
+    f : Callable[[str], Optional[dict]]
         An api call with a given key to be looked up
 
     Returns
     -------
-    function
+    Callable[[str], Optional[dict]]
         An outer function that wraps f with a try/except block
     """
 
     @functools.wraps(f)
-    def attempt(x: str) -> dict:
+    def attempt(x: str) -> Optional[dict]:
         try:
             return f(x)
         except KeyError:
@@ -35,8 +38,63 @@ def key_swallow(f: Callable[[str], dict]) -> Callable[[str], dict]:
     return attempt
 
 
-@key_swallow
-def gvol_from_isbn(isbn: str) -> str:
+def yarn_swallow(f: Callable[[str],
+                             Optional[str]]) -> Callable[[str], Optional[str]]:
+    """Wraps an API call function in order to eat KeyErrors
+
+    but for functions that can return strings
+
+    Parameters
+    ----------
+    f : Callable[[str], Optional[str]]
+        An api call with a given key to be looked up
+
+    Returns
+    -------
+    Callable[[str], Optional[str]]
+        An outer function that wraps f with a try/except block
+    """
+
+    @functools.wraps(f)
+    def attempt(x: str) -> Optional[str]:
+        try:
+            return f(x)
+        except KeyError:
+            return None
+        return None
+    return attempt
+
+
+def map_swallow(f: Callable[[dict],
+                            Optional[dict]]) -> Callable[[dict],
+                                                         Optional[dict]]:
+    """Wraps an API call function in order to eat KeyErrors
+
+    but for functions that take and return dictionaries
+
+    Parameters
+    ----------
+    f : Callable[[dict], Optional[dict]]
+        An api call with a given key to be looked up
+
+    Returns
+    -------
+    Callable[[dict], Optional[dict]]
+        An outer function that wraps f with a try/except block
+    """
+
+    @functools.wraps(f)
+    def attempt(x: dict) -> Optional[dict]:
+        try:
+            return f(x)
+        except KeyError:
+            return None
+        return None
+    return attempt
+
+
+@yarn_swallow
+def gvol_from_isbn(isbn: str) -> Optional[str]:
     """Gets a google books volume id from the API using a given ISBN
 
     Parameters
@@ -57,7 +115,7 @@ def gvol_from_isbn(isbn: str) -> str:
 
 
 @key_swallow
-def gobo_meta(isbn: str) -> dict:
+def gobo_meta(isbn: str) -> Optional[dict]:
     """Gets the metadata of an ISBN from the Google Books API
 
     Parameters
@@ -67,7 +125,7 @@ def gobo_meta(isbn: str) -> dict:
 
     Returns
     -------
-    dict
+    Optional[dict]
         The dictionary of metadata from the API, or None
     """
 
@@ -81,7 +139,7 @@ def gobo_meta(isbn: str) -> dict:
 
 
 @key_swallow
-def ol_meta(isbn: str) -> dict:
+def ol_meta(isbn: str) -> Optional[dict]:
     """Gets the metadata of an ISBN from the OpenLibrary API
 
     Parameters
@@ -91,7 +149,7 @@ def ol_meta(isbn: str) -> dict:
 
     Returns
     -------
-    dict
+    Optional[dict]
         The dictionary of metadata from the API, or None
     """
 
@@ -103,7 +161,7 @@ def ol_meta(isbn: str) -> dict:
 
 
 @key_swallow
-def isbndb_meta(isbn: str) -> dict:
+def isbndb_meta(isbn: str) -> Optional[dict]:
     """Gets the metadata of an ISBN from the ISBNDB API
 
     Parameters
@@ -113,7 +171,7 @@ def isbndb_meta(isbn: str) -> dict:
 
     Returns
     -------
-    dict
+    Optional[dict]
         The dictionary of metadata from the API, or None
     """
 
@@ -127,7 +185,7 @@ def isbndb_meta(isbn: str) -> dict:
 
 @functools.lru_cache
 # cache results using the least recently used algo in functools module
-def meta(isbn: str, method: List[Callable[[str], dict]] =
+def meta(isbn: str, method: List[Callable[[str], Optional[dict]]] =
          [gobo_meta, ol_meta, isbndb_meta]) -> dict:
     """Gets the metadata for a given ISBN from various API sources
 
@@ -144,11 +202,11 @@ def meta(isbn: str, method: List[Callable[[str], dict]] =
         A dictionary of API names mapped to returned metadata from each
     """
 
-    def prettify(x: Callable[[str], dict]) -> str:
+    def prettify(x: Callable[[str], Optional[dict]]) -> str:
         # get API names from their functions using the closure dunder
         return x.__closure__[0].cell_contents.__name__.split('_')[0]
     m_names: List[str] = list(map(prettify, method))
-    meta: List[dict] = [m(isbn) for m in method]
+    meta: List[Optional[dict]] = [m(isbn) for m in method]
     return {k: v for (k, v) in zip(m_names, meta)}
 
 
@@ -170,8 +228,8 @@ def field(f: str, isbn: str) -> dict:
 
     m: dict = meta(isbn)
 
-    @key_swallow
-    def wrapped(x: dict) -> dict:
+    @map_swallow
+    def wrapped(x: dict) -> Optional[dict]:
         # helper function to do the lookups on the returned metadata
         return x[f]
     return {k + '_' + f: wrapped(v) for (k, v) in m.items() if v}
@@ -187,7 +245,7 @@ def gf_partial(f: str) -> Callable[[str], dict]:
 
     Returns
     -------
-    function
+    Callable[[str], dict]
         a partial application of the field function using f as the field
     """
 
@@ -245,7 +303,7 @@ def publisher(isbn: str) -> dict:
         a dictionary of publisher data from each API searched
     """
 
-    m: Dict[dict] = meta(isbn)
+    m: dict = meta(isbn)
     res: dict = {}
     for i in m.keys():
         if m[i]:
@@ -278,7 +336,7 @@ def dimensions(isbn: str) -> dict:
         a dictionary of dimension data from each API searched
     """
 
-    m: Dict[dict] = meta(isbn)
+    m: dict = meta(isbn)
     res: dict = {}
     for i in m.keys():
         if m[i]:
@@ -399,7 +457,7 @@ def weight(isbn: str) -> dict:
     return {'isbndb': res['isbndb']}
 
 
-def ol_cover(isbn: str) -> str:
+def ol_cover(isbn: str) -> Optional[str]:
     """Gets the cover of an ISBN from OpenLibrary Covers
 
     Parameters
@@ -435,7 +493,7 @@ def image_url(isbn: str) -> dict:
         a dictionary of image url data from each API searched
     """
 
-    m: Dict[dict] = meta(isbn)
+    m: dict = meta(isbn)
     res: dict = {}
     for i in m.keys():
         if m[i]:

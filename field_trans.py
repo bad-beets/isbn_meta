@@ -1,7 +1,8 @@
 import get
+from typing import Callable, Dict, Optional, Union
 
 
-fields = {
+fields: Dict[str, Callable[[str], Optional[Union[dict, str]]]] = {
     'product_isbn': lambda x: x,
     'product_title': get.title,
     'format': get.binding,
@@ -17,5 +18,17 @@ fields = {
     }
 
 
-def translate(x):
-    return fields[x]
+def translate(f: str) -> Callable[[str], Optional[Union[dict, str]]]:
+    """A mapping from field names to their respective getter functions
+
+    Parameters
+    ----------
+    f : str
+        The field to return
+
+    Returns
+    -------
+    Callable[[str], dict]
+        a dictionary of image url data from each API searched
+    """
+    return fields[f]
