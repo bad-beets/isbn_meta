@@ -1,10 +1,10 @@
-import metric
+from isbn_meta import metric
 import functools
 import requests
 import configparser
-import load_config
+from isbn_meta import load_config
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Optional
 from typing import Callable
 
 cfg: configparser.ConfigParser = load_config.cfg
