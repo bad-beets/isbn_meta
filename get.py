@@ -1,64 +1,73 @@
-from isbn_meta import metric
+import metric
 import functools
 import requests
 import configparser
-from isbn_meta import load_config
+import load_config
 from pathlib import Path
 from typing import List, Optional
 from typing import Callable
+from multiprocessing import Pool
 
 cfg: configparser.ConfigParser = load_config.cfg
 
 
-def key_swallow(f: Callable[[str],
-                            Optional[dict]]) -> Callable[[str],
-                                                         Optional[dict]]:
+def key_swallow(f: Callable[[str, Optional[requests.sessions.Session]],
+                            Optional[dict]]) -> Callable[
+                                [str, Optional[requests.sessions.Session]],
+                                Optional[dict]]:
     """Wraps an API call function in order to eat KeyErrors
 
     This is used as a decorator throughout get.py
 
     Parameters
     ----------
-    f : Callable[[str], Optional[dict]]
+    f : Callable[[str, Optional[requests.sessions.Session]], Optional[dict]]
         An api call with a given key to be looked up
 
     Returns
     -------
-    Callable[[str], Optional[dict]]
+    Callable[[str, Optional[requests.sessions.Session]], Optional[dict]]
         An outer function that wraps f with a try/except block
     """
 
     @functools.wraps(f)
-    def attempt(x: str) -> Optional[dict]:
+    def attempt(x: str,
+                y: Optional[requests.sessions.Session] = None
+                ) -> Optional[dict]:
         try:
-            return f(x)
+            return f(x, y)
         except KeyError:
             return None
         return None
     return attempt
 
 
-def yarn_swallow(f: Callable[[str],
-                             Optional[str]]) -> Callable[[str], Optional[str]]:
+def yarn_swallow(f: Callable[[str, Optional[requests.sessions.Session]],
+                             Optional[str]]) -> Callable[
+                                 [str,
+                                  Optional[requests.sessions.Session]],
+                                 Optional[str]]:
     """Wraps an API call function in order to eat KeyErrors
 
     but for functions that can return strings
 
     Parameters
     ----------
-    f : Callable[[str], Optional[str]]
+    f : Callable[[str, Optional[requests.sessions.Session]], Optional[str]]
         An api call with a given key to be looked up
 
     Returns
     -------
-    Callable[[str], Optional[str]]
+    Callable[[str, Optional[requests.sessions.Session]], Optional[str]]
         An outer function that wraps f with a try/except block
     """
 
     @functools.wraps(f)
-    def attempt(x: str) -> Optional[str]:
+    def attempt(x: str,
+                y: Optional[requests.sessions.Session] = None
+                ) -> Optional[str]:
         try:
-            return f(x)
+            return f(x, y)
         except KeyError:
             return None
         return None
@@ -94,34 +103,52 @@ def map_swallow(f: Callable[[dict],
 
 
 @yarn_swallow
-def gvol_from_isbn(isbn: str) -> Optional[str]:
+def gvol_from_isbn(isbn: str,
+                   s: Optional[requests.sessions.Session] = None
+                   ) -> Optional[str]:
     """Gets a google books volume id from the API using a given ISBN
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
-    str
+    Optional[str]
         The Google Books Volume ID string, or None if not found
     """
 
-    r: requests.models.Response = requests.get(cfg['gobo']['uri'] + isbn)
-    if r.status_code == 200:
-        return(r.json()["items"][0]['id'])
+    if not s:
+        with requests.Session() as s:
+            r: requests.models.Response = s.get(cfg['gobo']['uri'] + isbn)
+            if r.status_code == 200:
+                return r.json()["items"][0]['id']
+    else:
+        r: requests.models.Response = s.get(cfg['gobo']['uri'] + isbn)
+        if r.status_code == 200:
+            return r.json()["items"][0]['id']
     return None
 
 
 @key_swallow
-def gobo_meta(isbn: str) -> Optional[dict]:
+def gobo_meta(isbn: str,
+              s: Optional[requests.sessions.Session] = None
+              ) -> Optional[dict]:
     """Gets the metadata of an ISBN from the Google Books API
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
@@ -129,23 +156,38 @@ def gobo_meta(isbn: str) -> Optional[dict]:
         The dictionary of metadata from the API, or None
     """
 
-    vol_id: Optional[str] = gvol_from_isbn(isbn)
-    if vol_id:
-        r: requests.models.Response = requests.get(
-            cfg['gobo']['vol_uri'] + vol_id, params=cfg['gobo_params'])
-        if r.status_code == 200:
-            return r.json()["volumeInfo"]
+    if not s:
+        with requests.Session() as s:
+            vol_id: Optional[str] = gvol_from_isbn(isbn, s)
+            if vol_id:
+                r: requests.models.Response = s.get(
+                    cfg['gobo']['vol_uri'] + vol_id, params=cfg['gobo_params'])
+                if r.status_code == 200:
+                    return r.json()["volumeInfo"]
+    else:
+        vol_id: Optional[str] = gvol_from_isbn(isbn, s)
+        if vol_id:
+            r: requests.models.Response = s.get(
+                cfg['gobo']['vol_uri'] + vol_id, params=cfg['gobo_params'])
+            if r.status_code == 200:
+                return r.json()["volumeInfo"]
     return None
 
 
 @key_swallow
-def ol_meta(isbn: str) -> Optional[dict]:
+def ol_meta(isbn: str,
+            s: Optional[requests.sessions.Session] = None
+            ) -> Optional[dict]:
     """Gets the metadata of an ISBN from the OpenLibrary API
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
@@ -153,21 +195,34 @@ def ol_meta(isbn: str) -> Optional[dict]:
         The dictionary of metadata from the API, or None
     """
 
-    r: requests.models.Response = requests.get(
-        cfg['ol']['uri'] + isbn, params=cfg['ol_params'])
-    if r.status_code == 200:
-        return r.json()['ISBN:' + isbn]
+    if not s:
+        with requests.Session() as s:
+            r: requests.models.Response = s.get(
+                cfg['ol']['uri'] + isbn, params=cfg['ol_params'])
+            if r.status_code == 200:
+                return r.json()['ISBN:' + isbn]
+    else:
+        r: requests.models.Response = s.get(
+            cfg['ol']['uri'] + isbn, params=cfg['ol_params'])
+        if r.status_code == 200:
+            return r.json()['ISBN:' + isbn]
     return None
 
 
 @key_swallow
-def isbndb_meta(isbn: str) -> Optional[dict]:
+def isbndb_meta(isbn: str,
+                s: Optional[requests.sessions.Session] = None
+                ) -> Optional[dict]:
     """Gets the metadata of an ISBN from the ISBNDB API
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
@@ -175,18 +230,60 @@ def isbndb_meta(isbn: str) -> Optional[dict]:
         The dictionary of metadata from the API, or None
     """
 
-    r: requests.models.Response = requests.get(
-        cfg['isbndb']['uri'] + "book/" + isbn,
-        headers=cfg['isbndb_headers'])
-    if r.status_code == 200:
-        return r.json()['book']
+    if not s:
+        with requests.Session() as s:
+            r: requests.models.Response = s.get(
+                cfg['isbndb']['uri'] + "book/" + isbn,
+                headers=cfg['isbndb_headers'])
+            if r.status_code == 200:
+                return r.json()['book']
+    else:
+        r: requests.models.Response = s.get(
+            cfg['isbndb']['uri'] + "book/" + isbn,
+            headers=cfg['isbndb_headers'])
+        if r.status_code == 200:
+            return r.json()['book']
     return None
+
+
+def multi_helper(isbn: str,
+                 s: Optional[requests.sessions.Session],
+                 f: Callable[[str,
+                              Optional[requests.sessions.Session]],
+                             Optional[dict]]
+                 ) -> Optional[dict]:
+    """Helper function used for partial application inside meta
+    multi_helper takes three argumens, and calls the last argument
+    with the first two as its own arguments
+    lambdas, closures, and local functions cannot be pickled
+    (serialized) for multiprocessing, hence the top-level definition
+
+    Parameters
+    ----------
+    isbn : str
+        The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
+    f: Callable[[str, Optional[requests.sessions.Session]],
+                             Optional[dict]]
+
+    Returns
+    -------
+    Optional[dict]
+        A dictionary representing the returned API data
+    """
+    return f(isbn, s)
 
 
 @functools.lru_cache
 # cache results using the least recently used algo in functools module
-def meta(isbn: str, method: List[Callable[[str], Optional[dict]]] =
-         [gobo_meta, ol_meta, isbndb_meta]) -> dict:
+def meta(isbn: str, method: List[Callable[
+        [str, Optional[requests.sessions.Session]], Optional[dict]]] =
+         [gobo_meta, ol_meta, isbndb_meta],
+         s: Optional[requests.sessions.Session] = None
+         ) -> Optional[dict]:
     """Gets the metadata for a given ISBN from various API sources
 
     Parameters
@@ -195,19 +292,37 @@ def meta(isbn: str, method: List[Callable[[str], Optional[dict]]] =
         The ISBN of the work
     method : list
         A list of functions that implement specific API lookups
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
-    dict
+    Optional[dict]
         A dictionary of API names mapped to returned metadata from each
     """
 
-    def prettify(x: Callable[[str], Optional[dict]]) -> str:
+    def prettify(x: Callable[
+            [str, Optional[requests.sessions.Session]],
+            Optional[dict]]
+                 ) -> str:
         # get API names from their functions using the closure dunder
         return x.__closure__[0].cell_contents.__name__.split('_')[0]
+
     m_names: List[str] = list(map(prettify, method))
-    meta: List[Optional[dict]] = [m(isbn) for m in method]
-    return {k: v for (k, v) in zip(m_names, meta)}
+    if not s:
+        with requests.Session() as s:
+            with Pool(6) as p:
+                meta: List[Optional[dict]] = [m for m in p.map(
+                    functools.partial(multi_helper, isbn, s), method)]
+                return {k: v for (k, v) in zip(m_names, meta)}
+    else:
+        with Pool(6) as p:
+            meta: List[Optional[dict]] = [m for m in p.map(
+                functools.partial(multi_helper, isbn, s), method)]
+            return {k: v for (k, v) in zip(m_names, meta)}
+    return None
 
 
 def field(f: str, isbn: str) -> dict:

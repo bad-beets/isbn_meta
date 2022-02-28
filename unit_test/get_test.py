@@ -2,6 +2,7 @@
 
 import pytest
 import hypothesis
+import requests
 from isbn_meta import isbn_gen
 from isbn_meta import get
 from typing import Optional
@@ -24,10 +25,12 @@ def test_key_swallow_return_none() -> None:
     test_dict_outer: dict = {"lorem": test_dict_inner_eins,
                              "ipsum": test_dict_inner_zwei}
 
-    @get.key_swallow
-    def inner(k: str) -> Optional[dict]:
-        return test_dict_outer[k]
-    assert inner("dolor sit amet") is None
+    with requests.Session() as s:
+        @get.key_swallow
+        def inner(x: str,
+                  y: Optional[requests.sessions.Session]) -> Optional[dict]:
+            return test_dict_outer[x]
+        assert inner("dolor sit amet", s) is None
 
 
 def test_key_swallow_return_some() -> None:
@@ -47,11 +50,13 @@ def test_key_swallow_return_some() -> None:
     test_dict_outer: dict = {"lorem": test_dict_inner_eins,
                              "ipsum": test_dict_inner_zwei}
 
-    @get.key_swallow
-    def inner(k: str) -> Optional[dict]:
-        return test_dict_outer[k]
-    assert inner("lorem") is test_dict_inner_eins
-    assert inner("ipsum") is test_dict_inner_zwei
+    with requests.Session() as s:
+        @get.key_swallow
+        def inner(x: str,
+                  y: Optional[requests.sessions.Session]) -> Optional[dict]:
+            return test_dict_outer[x]
+        assert inner("lorem", s) is test_dict_inner_eins
+        assert inner("ipsum", s) is test_dict_inner_zwei
 
 
 def test_key_swallow_return_error() -> None:
@@ -72,14 +77,16 @@ def test_key_swallow_return_error() -> None:
     test_dict_outer: dict = {"lorem": test_dict_inner_eins,
                              "ipsum": test_dict_inner_zwei}
 
-    @get.key_swallow
-    def inner(k: str) -> Optional[dict]:
-        a: int = 0
-        b: int = 10 / a
-        b: int = 0
-        return test_dict_outer[k[b] + k[1:]]
-    with pytest.raises(ZeroDivisionError):
-        assert inner("lorem") is test_dict_inner_eins
+    with requests.Session() as s:
+        @get.key_swallow
+        def inner(x: str,
+                  y: Optional[requests.sessions.Session]) -> Optional[dict]:
+            a: int = 0
+            b: int = 10 / a
+            b: int = 0
+            return test_dict_outer[x[b] + x[1:]]
+        with pytest.raises(ZeroDivisionError):
+            assert inner("lorem", s) is test_dict_inner_eins
 
 
 def test_yarn_swallow_return_none() -> None:
@@ -103,10 +110,12 @@ def test_yarn_swallow_return_none() -> None:
                              "dolor": inner_drei,
                              "sit": inner_vier}
 
-    @get.yarn_swallow
-    def inner(k: str) -> Optional[str]:
-        return test_dict_outer[k]
-    assert inner("dolor sit amet") is None
+    with requests.Session() as s:
+        @get.yarn_swallow
+        def inner(x: str,
+                  y: Optional[requests.sessions.Session]) -> Optional[str]:
+            return test_dict_outer[x]
+        assert inner("dolor sit amet", s) is None
 
 
 def test_yarn_swallow_return_some() -> None:
@@ -130,13 +139,15 @@ def test_yarn_swallow_return_some() -> None:
                              "dolor": inner_drei,
                              "sit": inner_vier}
 
-    @get.yarn_swallow
-    def inner(k: str) -> Optional[str]:
-        return test_dict_outer[k]
-    assert inner("lorem") is inner_eins
-    assert inner("ipsum") is inner_zwei
-    assert inner("dolor") is inner_drei
-    assert inner("sit") is inner_vier
+    with requests.Session() as s:
+        @get.yarn_swallow
+        def inner(x: str,
+                  y: Optional[requests.sessions.Session]) -> Optional[str]:
+            return test_dict_outer[x]
+        assert inner("lorem", s) is inner_eins
+        assert inner("ipsum", s) is inner_zwei
+        assert inner("dolor", s) is inner_drei
+        assert inner("sit", s) is inner_vier
 
 
 def test_yarn_swallow_return_error() -> None:
@@ -161,17 +172,19 @@ def test_yarn_swallow_return_error() -> None:
                              "dolor": inner_drei,
                              "sit": inner_vier}
 
-    @get.yarn_swallow
-    def inner(k: str) -> Optional[str]:
-        a: int = 0
-        b: int = 10 / a
-        b: int = 0
-        return test_dict_outer[k[b] + k[1:]]
-    with pytest.raises(ZeroDivisionError):
-        assert inner("lorem") is inner_eins
-        assert inner("ipsum") is inner_zwei
-        assert inner("dolor") is inner_drei
-        assert inner("sit") is inner_vier
+    with requests.Session() as s:
+        @get.yarn_swallow
+        def inner(x: str,
+                  y: Optional[requests.sessions.Session]) -> Optional[str]:
+            a: int = 0
+            b: int = 10 / a
+            b: int = 0
+            return test_dict_outer[x[b] + x[1:]]
+        with pytest.raises(ZeroDivisionError):
+            assert inner("lorem", s) is inner_eins
+            assert inner("ipsum", s) is inner_zwei
+            assert inner("dolor", s) is inner_drei
+            assert inner("sit", s) is inner_vier
 
 
 def test_map_swallow_return_none() -> None:
@@ -297,7 +310,8 @@ def test_gvol_from_isbn_bad_isbn() -> None:
     -------
     None
     """
-    assert get.gvol_from_isbn(isbn_gen.isbn_bogus()) is None
+    with requests.Session() as s:
+        assert get.gvol_from_isbn(isbn_gen.isbn_bogus(), s) is None
 
 
 def test_gvol_from_isbn_known_isbn() -> None:
@@ -323,12 +337,16 @@ def test_gvol_from_isbn_known_isbn() -> None:
     -------
     None
     """
-    for i in range(5):
-        isbn: str = isbn_gen.isbn_known()
-        gobo: dict = get.gobo_meta(isbn)
-        ident: list = gobo['industryIdentifiers']
-        for i in ident:
-            if 'ISBN_13' in i.values():
-                isbn_cloudy: str = i['identifier']
-        assert isbn == isbn_cloudy
-        assert get.gvol_from_isbn(isbn) == gobo['canonicalVolumeLink'][-12:]
+    with requests.Session() as s:
+        for i in range(5):
+            isbn: str = isbn_gen.isbn_known()
+            gobo: Optional[dict] = get.gobo_meta(isbn, s)
+            if not gobo:
+                continue
+            ident: list = gobo['industryIdentifiers']
+            vol: str = gobo['canonicalVolumeLink'][-12:]
+            for i in ident:
+                if 'ISBN_13' in i.values():
+                    isbn_cloudy: str = i['identifier']
+            assert isbn == isbn_cloudy
+            assert get.gvol_from_isbn(isbn, s) == vol
