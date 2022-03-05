@@ -3,8 +3,8 @@
 import pytest
 import hypothesis
 import requests
-from isbn_meta import isbn_gen
-from isbn_meta import get
+import isbn_gen
+import get
 from typing import Optional
 
 
@@ -350,3 +350,94 @@ def test_gvol_from_isbn_known_isbn() -> None:
                     isbn_cloudy: str = i['identifier']
             assert isbn == isbn_cloudy
             assert get.gvol_from_isbn(isbn, s) == vol
+
+
+def test_gobo_meta_bad_isbn() -> None:
+    """Checks that a bogus isbn passed to the
+    gobo_meta function returns None
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    None
+    """
+    assert get.gobo_meta(isbn_gen.isbn_bogus()) is None
+
+
+def test_gobo_meta_error() -> None:
+    """Checks that errors other than KeyError are
+    propagated correctly
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    None
+    """
+    with pytest.raises(TypeError):
+        assert get.gobo_meta(lambda x: x) is None
+
+
+def test_ol_meta_bad_isbn() -> None:
+    """Checks that ol_meta functions returns
+    None on KeyError, for instance when
+    passed a bogus isbn or the title in not
+    found
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    None
+    """
+    assert get.ol_meta(isbn_gen.isbn_bogus()) is None
+
+
+def test_ol_meta_error() -> None:
+    """Checks that errors other than KeyError are
+    propagated correctly
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    None
+    """
+    with pytest.raises(TypeError):
+        assert get.ol_meta(lambda x: x) is None
+
+
+def test_isbndb_meta_bad_isbn() -> None:
+    """Checks that isbndb_meta function returns
+    None on KeyError, for instance when
+    passed a bogus isbn or the title in not
+    found
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    None
+    """
+    assert get.isbndb_meta(isbn_gen.isbn_bogus()) is None
+
+
+def test_isbndb_meta_error() -> None:
+    """Checks that errors other than KeyError are
+    propagated correctly
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    None
+    """
+    with pytest.raises(TypeError):
+        assert get.isbndb_meta(lambda x: x) is None

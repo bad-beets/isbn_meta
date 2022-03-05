@@ -1,6 +1,9 @@
 import metric
 import functools
 import requests
+import sqlite3
+import sqlalchemy as db
+import pandas as pd
 import configparser
 import load_config
 from pathlib import Path
@@ -100,6 +103,148 @@ def map_swallow(f: Callable[[dict],
             return None
         return None
     return attempt
+
+
+def csv_meta(isbn: str, path: str
+             ) -> Optional[pd.core.frame.DataFrame]:
+    """Gets the metadata of an ISBN from a Comma Separated Values
+    (.csv) file
+
+    Parameters
+    ----------
+    isbn : str
+        The ISBN of the work
+    path : str
+        The filesystem path to the csv file
+
+    Returns
+    -------
+    Optional[pd.core.frame.DataFrame]
+        The Pandas DataFrame of metadata from the database, or None
+    """
+    df: pd.core.frame.DataFrame = pd.read_csv(path)[['product_isbn',
+                                                     'product_title',
+                                                     'format',
+                                                     'product_description',
+                                                     'product_retail',
+                                                     'publisher',
+                                                     'product_weight',
+                                                     'product_width',
+                                                     'product_height',
+                                                     'product_thickness',
+                                                     'Author']]
+    return df[df['product_isbn'] == isbn]
+
+
+def sqlite_meta(isbn: str,
+                c: Optional[sqlite3.Connection] = None
+                ) -> Optional[pd.core.frame.DataFrame]:
+    """Gets the metadata of an ISBN from the sqlite database
+
+    Parameters
+    ----------
+    isbn : str
+        The ISBN of the work
+    c: Optional[sqlite3.Connection]
+        An optional, existing sqlite3 connection to make the SQL query
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
+
+    Returns
+    -------
+    Optional[pd.core.frame.DataFrame]
+        The Pandas DataFrame of metadata from the database, or None
+    """
+    assert all(list(map(str.isdigit, isbn)))           # input checks
+    assert (isbn[:3] == '978') or (isbn[:3] == '979')  # to prevent
+    assert len(isbn) == 13                             # sql injection
+    assert type(isbn) == str
+    if not c:
+        with sqlite3.connect('isbn.db') as c:
+            return pd.read_sql('SELECT * FROM ' +
+                               'products WHERE product_isbn = ' +
+                               isbn, con=c)
+    else:
+        return pd.read_sql('SELECT * FROM ' +
+                           'products WHERE product_isbn = ' +
+                           isbn, con=c)
+
+
+def mariadb_meta(isbn: str,
+                 c: Optional[db.engine.base.Connection] = None
+                 ) -> Optional[pd.core.frame.DataFrame]:
+    """Gets the metadata of an ISBN from a MariaDB mysql database
+
+    Parameters
+    ----------
+    isbn : str
+        The ISBN of the work
+    c: Optional[db.engine.base.Connection]
+        An optional, existing sqlalchemy connection to make the SQL query
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
+
+    Returns
+    -------
+    Optional[pd.core.frame.DataFrame]
+        The Pandas DataFrame of metadata from the database, or None
+    """
+    assert all(list(map(str.isdigit, isbn)))           # input checks
+    assert (isbn[:3] == '978') or (isbn[:3] == '979')  # to prevent
+    assert len(isbn) == 13                             # sql injection
+    assert type(isbn) == str
+
+    def uri_gen(cfg: configparser.ConfigParser = cfg
+                ) -> str:
+        return ''.join([cfg['mariadb']['proto'], '://',
+                        cfg['mariadb']['user'], ':',
+                        cfg['mariadb']['auth'], '@',
+                        cfg['mariadb']['server'], '/',
+                        cfg['mariadb']['db']])
+
+    def db_select(df: pd.core.frame.DataFrame
+                  ) -> pd.core.frame.DataFrame:
+        return df[['product_isbn',
+                   'product_title',
+                   'product_description',
+                   'product_retail',
+                   'product_weight',
+                   'product_width',
+                   'product_height',
+                   'product_thickness',
+                   ]]  # still needs format, publisher, Author
+    if not c:
+        engine = db.create_engine(uri_gen())
+        with engine.connect() as c:
+            return db_select(pd.read_sql(
+                'SELECT * FROM ' +
+                'product WHERE product_isbn = ' +
+                isbn, con=c))
+    else:
+        return db_select(pd.read_sql(
+            'SELECT * FROM ' +
+            'product WHERE product_isbn = ' +
+            isbn, con=c))
+
+
+def df_meta(isbn: str,
+            df: pd.core.frame.DataFrame
+            ) -> Optional[pd.core.frame.DataFrame]:
+    """Gets the metadata of an ISBN from a Pandas DataFrame
+
+    Parameters
+    ----------
+    isbn : str
+        The ISBN of the work
+    df: pd.core.frame.DataFrame
+        A Pandas DataFrame containing ISBN metadata
+
+    Returns
+    -------
+    Optional[pd.core.frame.DataFrame]
+        The Pandas DataFrame of metadata from the database, or None
+    """
+    return df[df['product_isbn'] == isbn]
 
 
 @yarn_swallow
