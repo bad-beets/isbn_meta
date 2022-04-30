@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+from datetime import datetime
 import metric
 import functools
 import requests
@@ -133,7 +136,8 @@ def csv_meta(isbn: str, path: str
                                                      'product_height',
                                                      'product_thickness',
                                                      'Author']]
-    return df[df['product_isbn'] == isbn]
+
+    return df.loc[df['product_isbn'] == str(isbn)]
 
 
 def sqlite_meta(isbn: str,
@@ -162,11 +166,11 @@ def sqlite_meta(isbn: str,
     if not c:
         with sqlite3.connect('isbn.db') as c:
             return pd.read_sql('SELECT * FROM ' +
-                               'products WHERE product_isbn = ' +
+                               'product WHERE product_isbn = ' +
                                isbn, con=c)
     else:
         return pd.read_sql('SELECT * FROM ' +
-                           'products WHERE product_isbn = ' +
+                           'product WHERE product_isbn = ' +
                            isbn, con=c)
 
 
@@ -211,7 +215,7 @@ def mariadb_meta(isbn: str,
                    'product_weight',
                    'product_width',
                    'product_height',
-                   'product_thickness',
+                   'product_thickness'
                    ]]  # still needs format, publisher, Author
     if not c:
         engine = db.create_engine(uri_gen())
@@ -270,11 +274,12 @@ def gvol_from_isbn(isbn: str,
 
     if not s:
         with requests.Session() as s:
-            r: requests.models.Response = s.get(cfg['gobo']['uri'] + isbn)
+            r: requests.models.Response = s.get(
+                cfg['gobo']['uri'] + str(isbn))
             if r.status_code == 200:
                 return r.json()["items"][0]['id']
     else:
-        r: requests.models.Response = s.get(cfg['gobo']['uri'] + isbn)
+        r: requests.models.Response = s.get(cfg['gobo']['uri'] + str(isbn))
         if r.status_code == 200:
             return r.json()["items"][0]['id']
     return None
@@ -303,14 +308,15 @@ def gobo_meta(isbn: str,
 
     if not s:
         with requests.Session() as s:
-            vol_id: Optional[str] = gvol_from_isbn(isbn, s)
+            vol_id: Optional[str] = gvol_from_isbn(str(isbn), s)
             if vol_id:
                 r: requests.models.Response = s.get(
-                    cfg['gobo']['vol_uri'] + vol_id, params=cfg['gobo_params'])
+                    cfg['gobo']['vol_uri'] + vol_id,
+                    params=cfg['gobo_params'])
                 if r.status_code == 200:
                     return r.json()["volumeInfo"]
     else:
-        vol_id: Optional[str] = gvol_from_isbn(isbn, s)
+        vol_id: Optional[str] = gvol_from_isbn(str(isbn), s)
         if vol_id:
             r: requests.models.Response = s.get(
                 cfg['gobo']['vol_uri'] + vol_id, params=cfg['gobo_params'])
@@ -343,14 +349,14 @@ def ol_meta(isbn: str,
     if not s:
         with requests.Session() as s:
             r: requests.models.Response = s.get(
-                cfg['ol']['uri'] + isbn, params=cfg['ol_params'])
+                cfg['ol']['uri'] + str(isbn), params=cfg['ol_params'])
             if r.status_code == 200:
                 return r.json()['ISBN:' + isbn]
     else:
         r: requests.models.Response = s.get(
-            cfg['ol']['uri'] + isbn, params=cfg['ol_params'])
+            cfg['ol']['uri'] + str(isbn), params=cfg['ol_params'])
         if r.status_code == 200:
-            return r.json()['ISBN:' + isbn]
+            return r.json()['ISBN:' + str(isbn)]
     return None
 
 
@@ -378,13 +384,13 @@ def isbndb_meta(isbn: str,
     if not s:
         with requests.Session() as s:
             r: requests.models.Response = s.get(
-                cfg['isbndb']['uri'] + "book/" + isbn,
+                cfg['isbndb']['uri'] + "book/" + str(isbn),
                 headers=cfg['isbndb_headers'])
             if r.status_code == 200:
                 return r.json()['book']
     else:
         r: requests.models.Response = s.get(
-            cfg['isbndb']['uri'] + "book/" + isbn,
+            cfg['isbndb']['uri'] + "book/" + str(isbn),
             headers=cfg['isbndb_headers'])
         if r.status_code == 200:
             return r.json()['book']
@@ -398,7 +404,7 @@ def multi_helper(isbn: str,
                              Optional[dict]]
                  ) -> Optional[dict]:
     """Helper function used for partial application inside meta
-    multi_helper takes three argumens, and calls the last argument
+    multi_helper takes three arguments, and calls the last argument
     with the first two as its own arguments
     lambdas, closures, and local functions cannot be pickled
     (serialized) for multiprocessing, hence the top-level definition
@@ -491,8 +497,9 @@ def field(f: str, isbn: str) -> dict:
     @map_swallow
     def wrapped(x: dict) -> Optional[dict]:
         # helper function to do the lookups on the returned metadata
-        return x[f]
-    return {k + '_' + f: wrapped(v) for (k, v) in m.items() if v}
+        if x:
+            return x[f]
+    return {k + '_' + f: wrapped(v) for (k, v) in m.items() if wrapped(v)}
 
 
 def gf_partial(f: str) -> Callable[[str], dict]:
@@ -512,11 +519,120 @@ def gf_partial(f: str) -> Callable[[str], dict]:
     return functools.partial(field, f)
 
 
+def isbndb_subtitle(f: Callable[[str], Optional[dict]]
+                    ) -> Callable[[str], Optional[dict]]:
+    """Wraps the subtitle function in order to add subtitle data from
+    isbndb
+
+
+    Parameters
+    ----------
+    f : Callable[[str], Optional[dict]]
+        The subtitle function
+
+    Returns
+    -------
+    Callable[[str], Optional[dict]]
+        An outer function that wraps f with the necessary process to
+        return isbndb subtitle data
+    """
+
+    @functools.wraps(f)
+    def isbndb(x: str,
+               ) -> Optional[dict]:
+        res: dict = f(x)
+        m = isbndb_meta(x)
+        if m:
+            if 'title_long' in m.keys():
+                res['isbndb_subtitle'] = m['title_long'].split(':')[-1]
+            else:
+                res['isbndb_subtitle'] = m['title'].split(':')[-1]
+            return res
+        return None
+    return isbndb
+
+
+@isbndb_subtitle
+def subtitle(isbn: str) -> Optional[dict]:
+    """Gets the subtitle of an ISBN from metadata API sources
+
+    Parameters
+    ----------
+    isbn : str
+        The ISBN of the work
+
+    Returns
+    -------
+    dict
+        a dictionary of subtitle data from each API searched
+    """
+    return gf_partial("subtitle")(isbn)
+
+
+def rest_pubdate(f: Callable[[str], Optional[dict]]
+                 ) -> Callable[[str], Optional[dict]]:
+    """Wraps the published_date function in order to add data from
+    openlibrary and isbndb to the google books published date data
+
+
+    Parameters
+    ----------
+    f : Callable[[str], Optional[dict]]
+        The published_date function
+
+    Returns
+    -------
+    Callable[[str], Optional[dict]]
+        An outer function that wraps f with the necessary process to
+        return the published date data
+    """
+
+    @functools.wraps(f)
+    def rest(x: str,
+             ) -> Optional[dict]:
+        res: dict = f(x)
+        m = meta(x)
+        if m:
+            if 'ol' in m.keys() and m['ol']:
+                if 'publish_date' in m['ol'].keys():
+                    d: str = m['ol']['publish_date']
+                    if len(d) > 4:
+                        d2 = d.split()
+                        d2[0] = d2[0][:3]
+                        d = ' '.join(d2)
+                        d = datetime.strptime(
+                            d, '%b %d, %Y').strftime('%Y-%m-%d')
+                    res['ol_published_date'] = d
+            if 'isbndb' in m.keys() and m['isbndb']:
+                if 'date_published' in m['isbndb'].keys():
+                    d: str = m['isbndb']['date_published']
+                    if len(d) > 4:
+                        d = d[:10]
+                    res['isbndb_published_date'] = d
+            return res
+        return None
+    return rest
+
+
+@rest_pubdate
+def published_date(isbn: str) -> Optional[dict]:
+    """Gets the published date of an ISBN from metadata API sources
+
+    Parameters
+    ----------
+    isbn : str
+        The ISBN of the work
+
+    Returns
+    -------
+    dict
+        a dictionary of published date data from each API searched
+    """
+    return gf_partial("publishedDate")(isbn)
+
+
 # here partial application saves us a lot of extraneous code
 title: Callable[[str], dict] = gf_partial("title")
-subtitle: Callable[[str], dict] = gf_partial("subtitle")
-authors: Callable[[str], dict] = gf_partial("authors")
-published_date: Callable[[str], dict] = gf_partial("publishedDate")
 description: Callable[[str], dict] = gf_partial("description")
 industry_identifiers: Callable[[str], dict] = gf_partial(
     "industryIdentifiers")
@@ -529,11 +645,11 @@ def gen_doc():
     """Generates docstrings for field partials
     """
 
-    f: List[Callable[[str], dict]] = [title, subtitle, authors,
-                                      published_date, description,
+    f: List[Callable[[str], dict]] = [title,
+                                      description,
                                       industry_identifiers, page_count,
                                       msrp, binding]
-    g: List[str] = ["title", "subtitle", "authors", "published_date",
+    g: List[str] = ["title",
                     "description", "industry_identifiers", "page_count",
                     "msrp", "binding"]
 
@@ -547,6 +663,41 @@ def gen_doc():
 
 
 gen_doc()
+
+
+def authors(isbn: str) -> dict:
+    """Gets the authors of an ISBN from metadata API sources
+
+    Parameters
+    ----------
+    isbn : str
+        The ISBN of the work
+
+    Returns
+    -------
+    dict
+        a dictionary of author data from each API searched
+    """
+
+    m: dict = meta(isbn)
+    res: dict = {}
+    for i in m.keys():
+        j = i + '_authors'
+        if m[i]:
+            if i == 'ol':
+                try:
+                    res[j] = ', '.join(
+                        [p['name'] for p in m[i]['authors']])
+                except KeyError:
+                    continue
+            else:
+                try:
+                    res[j] = ', '.join(m[i]['authors'])
+                except KeyError:
+                    continue
+        else:
+            continue
+    return res
 
 
 def publisher(isbn: str) -> dict:
@@ -566,33 +717,41 @@ def publisher(isbn: str) -> dict:
     m: dict = meta(isbn)
     res: dict = {}
     for i in m.keys():
+        j = i + '_publisher'
         if m[i]:
             if i == 'ol':
                 try:
-                    res[i] = m[i]['publishers']
+                    res[j] = ', '.join(
+                        [p['name'] for p in m[i]['publishers']])
                 except KeyError:
-                    res[i] = None
+                    continue
             else:
                 try:
-                    res[i] = m[i]['publisher']
+                    res[j] = m[i]['publisher']
                 except KeyError:
-                    res[i] = None
+                    continue
         else:
-            res[i] = None
+            continue
     return res
 
 
-def dimensions(isbn: str) -> dict:
+def dimensions(isbn: str,
+               s: Optional[requests.sessions.Session] = None
+               ) -> Optional[dict]:
     """Gets the dimensions of an ISBN from metadata API sources
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
-    dict
+    Optional[dict]
         a dictionary of dimension data from each API searched
     """
 
@@ -612,21 +771,27 @@ def dimensions(isbn: str) -> dict:
                     res[i] = None
         else:
             res[i] = None
-    return res
+    return {k: v for (k, v) in res.items() if res[k]}
 
 
 @key_swallow
-def width(isbn: str) -> dict:
+def width(isbn: str,
+          s: Optional[requests.sessions.Session] = None
+          ) -> Optional[dict]:
     """Gets the width of an ISBN from metadata API sources
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
-    dict
+    Optional[dict]
         a dictionary of width data from each API searched
     """
 
@@ -643,17 +808,23 @@ def width(isbn: str) -> dict:
 
 
 @key_swallow
-def height(isbn: str) -> dict:
+def height(isbn: str,
+           s: Optional[requests.sessions.Session] = None
+           ) -> Optional[dict]:
     """Gets the height of an ISBN from metadata API sources
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
-    dict
+    Optional[dict]
         a dictionary of height data from each API searched
     """
 
@@ -670,17 +841,23 @@ def height(isbn: str) -> dict:
 
 
 @key_swallow
-def thickness(isbn: str) -> dict:
+def thickness(isbn: str,
+              s: Optional[requests.sessions.Session] = None
+              ) -> Optional[dict]:
     """Gets the thickness of an ISBN from metadata API sources
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
-    dict
+    Optional[dict]
         a dictionary of thickness data from each API searched
     """
 
@@ -697,17 +874,23 @@ def thickness(isbn: str) -> dict:
 
 
 @key_swallow
-def weight(isbn: str) -> dict:
+def weight(isbn: str,
+           s: Optional[requests.sessions.Session] = None
+           ) -> Optional[dict]:
     """Gets the weight of an ISBN from metadata API sources
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
-    dict
+    Optional[dict]
         a dictionary of weight data from each API searched
     """
 
@@ -717,21 +900,27 @@ def weight(isbn: str) -> dict:
     return {'isbndb': res['isbndb']}
 
 
-def ol_cover(isbn: str) -> Optional[str]:
+def ol_cover(isbn: str, s: Optional[requests.sessions.Session] = None
+             ) -> Optional[str]:
     """Gets the cover of an ISBN from OpenLibrary Covers
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
-    str
+    Optional[str]
         the URI of the cover on OpenLibrary, or None
     """
 
-    url: str = cfg['ol']['covers_uri'] + isbn + cfg['ol']['covers_suffix']
+    url: str = cfg['ol']['covers_uri'] + str(
+        isbn) + cfg['ol']['covers_suffix']
     r: requests.models.Response = requests.get(url)
     if r.status_code == 200:
         return url
@@ -739,17 +928,22 @@ def ol_cover(isbn: str) -> Optional[str]:
         return None
 
 
-def image_url(isbn: str) -> dict:
+def image_url(isbn: str, s: Optional[requests.sessions.Session] = None
+              ) -> Optional[dict]:
     """Gets the image url of an ISBN from metadata API sources
 
     Parameters
     ----------
     isbn : str
         The ISBN of the work
+    s: Optional[requests.sessions.Session]
+        An optional, existing requests session to make the API call
+        A new one will be created and closed within the function call
+        if one is not provided as an argument
 
     Returns
     -------
-    dict
+    Optional[dict]
         a dictionary of image url data from each API searched
     """
 
@@ -759,7 +953,7 @@ def image_url(isbn: str) -> dict:
         if m[i]:
             if i == 'gobo':
                 try:
-                    res[i] = m[i]['imageLinks']
+                    res[i] = m[i]['imageLinks']['thumbnail']
                 except KeyError:
                     res[i] = None
             elif i == 'ol':
@@ -771,4 +965,4 @@ def image_url(isbn: str) -> dict:
                     res[i] = None
         else:
             res[i] = None
-    return res
+    return {k: v for (k, v) in res.items() if res[k]}

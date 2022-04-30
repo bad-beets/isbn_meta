@@ -3,6 +3,7 @@
 import pytest
 import hypothesis
 import requests
+import pandas as pd
 import isbn_gen
 import get
 from typing import Optional
@@ -296,6 +297,305 @@ def test_map_swallow_return_error() -> None:
         assert inner(test_outer_un) is test_outer_deux
         assert inner(test_outer_deux) is test_outer_un
         assert inner(test_outer_trois) is test_outer_trois
+
+
+def test_csv_meta_dims() -> None:
+    """Checks that the returned Pandas DataFrame from the
+    csv_meta function has the appropriate dimensions
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    None
+    """
+    m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780711246812',
+                                                        'unit_test/test.csv')
+    assert len(list(m.columns)) == 11
+    assert len(m) == 1
+
+
+def test_csv_meta_columns() -> None:
+    """Checks that the returned Pandas DataFrame from the
+    csv_meta function has the appropriate columns
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    None
+    """
+    m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780711246812',
+                                                        'unit_test/test.csv')
+    assert list(m.columns) == ['product_isbn',
+                               'product_title',
+                               'format',
+                               'product_description',
+                               'product_retail',
+                               'publisher',
+                               'product_weight',
+                               'product_width',
+                               'product_height',
+                               'product_thickness',
+                               'Author']
+
+
+def test_csv_meta_bad_isbn() -> None:
+    """Checks that the returned value from the
+    csv_meta function is None when a lookup fails
+    is an empty dataframe
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    None
+    """
+    m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780716247812',
+                                                        'unit_test/test.csv')
+    assert m.empty
+
+
+def test_csv_meta_error() -> None:
+    """Checks that the csv_meta function propagates errors
+    in an expected way
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    None
+    """
+    with pytest.raises(TypeError):
+        assert get.csv_meta(lambda x: x, 'unit_test/test.csv') is None
+
+
+# def test_sqlite_meta_dims() -> None:
+#     """Checks that the returned Pandas DataFrame from the
+#     sqlite_meta function has the appropriate dimensions
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     m: Optional[pd.core.frame.DataFrame] = get.sqlite_meta('9780711246812')
+#     assert len(list(m.columns)) == 11
+#     assert len(m) == 1
+
+
+# def test_sqlite_meta_columns() -> None:
+#     """Checks that the returned Pandas DataFrame from the
+#     sqlite_meta function has the appropriate columns
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780711246812',
+#                                                         'unit_test/test.csv')
+#     assert list(m.columns) == ['product_isbn',
+#                                'product_title',
+#                                'format',
+#                                'product_description',
+#                                'product_retail',
+#                                'publisher',
+#                                'product_weight',
+#                                'product_width',
+#                                'product_height',
+#                                'product_thickness',
+#                                'Author']
+
+
+# def test_sqlite_meta_bad_isbn() -> None:
+#     """Checks that the returned value from the
+#     sqlite_meta function is None when a lookup fails
+#     is an empty dataframe
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780716247812',
+#                                                         'unit_test/test.csv')
+#     assert m.empty
+
+
+# def test_sqlite_meta_error() -> None:
+#     """Checks that the csv_meta function propagates errors
+#     other than KeyError in an expected way
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     with pytest.raises(TypeError):
+#         assert get.csv_meta(lambda x: x, 'unit_test/test.csv') is None
+
+
+# def test_mariadb_meta_dims() -> None:
+#     """Checks that the returned Pandas DataFrame from the
+#     mariadb_meta function has the appropriate dimensions
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780711246812',
+#                                                         'unit_test/test.csv')
+#     assert len(list(m.columns)) == 11
+#     assert len(m) == 1
+
+
+# def test_mariadb_meta_columns() -> None:
+#     """Checks that the returned Pandas DataFrame from the
+#     mariadb_meta function has the appropriate columns
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780711246812',
+#                                                         'unit_test/test.csv')
+#     assert list(m.columns) == ['product_isbn',
+#                                'product_title',
+#                                'format',
+#                                'product_description',
+#                                'product_retail',
+#                                'publisher',
+#                                'product_weight',
+#                                'product_width',
+#                                'product_height',
+#                                'product_thickness',
+#                                'Author']
+
+
+# def test_mariadb_meta_bad_isbn() -> None:
+#     """Checks that the returned value from the
+#     mariadb_meta function is None when a lookup fails
+#     is an empty dataframe
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780716247812',
+#                                                         'unit_test/test.csv')
+#     assert m.empty
+
+
+# def test_mariadb_meta_error() -> None:
+#     """Checks that the mariadb_meta function propagates errors
+#     other than KeyError in an expected way
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     with pytest.raises(TypeError):
+#         assert get.csv_meta(lambda x: x, 'unit_test/test.csv') is None
+
+
+# def test_df_meta_dims() -> None:
+#     """Checks that the returned Pandas DataFrame from the
+#     df_meta function has the appropriate dimensions
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780711246812',
+#                                                         'unit_test/test.csv')
+#     assert len(list(m.columns)) == 11
+#     assert len(m) == 1
+
+
+# def test_df_meta_columns() -> None:
+#     """Checks that the returned Pandas DataFrame from the
+#     df_meta function has the appropriate columns
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780711246812',
+#                                                         'unit_test/test.csv')
+#     assert list(m.columns) == ['product_isbn',
+#                                'product_title',
+#                                'format',
+#                                'product_description',
+#                                'product_retail',
+#                                'publisher',
+#                                'product_weight',
+#                                'product_width',
+#                                'product_height',
+#                                'product_thickness',
+#                                'Author']
+
+
+# def test_df_meta_bad_isbn() -> None:
+#     """Checks that the returned value from the
+#     df_meta function is None when a lookup fails
+#     is an empty dataframe
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     m: Optional[pd.core.frame.DataFrame] = get.csv_meta('9780716247812',
+#                                                         'unit_test/test.csv')
+#     assert m.empty
+
+
+# def test_df_meta_error() -> None:
+#     """Checks that the df_meta function propagates errors
+#     other than KeyError in an expected way
+
+#     Parameters
+#     ----------
+
+#     Returns
+#     -------
+#     None
+#     """
+#     with pytest.raises(TypeError):
+#         assert get.csv_meta(lambda x: x, 'unit_test/test.csv') is None
 
 
 def test_gvol_from_isbn_bad_isbn() -> None:

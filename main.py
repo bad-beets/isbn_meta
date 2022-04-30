@@ -2,6 +2,7 @@
 
 import log_setup
 import field_trans
+import choose
 import pandas as pd
 
 
@@ -56,7 +57,9 @@ def set_product(row: pd.core.series.Series) -> pd.core.series.Series:
     """
     res = row.copy()
     for i in row.index:
-        res[i] = field_trans.translate(i)(row['product_isbn'])
+        if i in field_trans.fields:
+            cell = field_trans.translate(i)(row['product_isbn'])
+            res[i] = choose.wisely(cell) if type(cell) is dict else cell
     return res
 
 
@@ -93,8 +96,27 @@ def export_csv(df: pd.core.frame.DataFrame, path: str) -> None:
     -------
     None
     """
-    df.to_csv(path)
+    df.to_csv(path, index=False)
 
+def csv_to_csv(read_path: str, write_path: str) -> None:
+    """Reads a csv from read_path and writes a csv to
+    write_path with the fields from field_trans populated
+    with metadata from the api sources
+
+    Parameters
+    ----------
+    read_path : str
+        The path of the csv to be read
+    write_path : str
+        the path where the csv file will be written
+
+    Returns
+    -------
+    None
+    """
+    export_csv(set_products(check_fields(import_csv(read_path))),
+               write_path)
+    return None
 
 # sparse test code; plan to write more, but you should be able to glean
 # basic usage from this and write some of your own tests

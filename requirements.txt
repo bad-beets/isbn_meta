@@ -1,0 +1,8 @@
+fuzzywuzzy==0.18.0
+hypothesis==6.45.2
+Pint==0.19.1
+SQLAlchemy==1.4.35
+configparser==5.2.0
+pandas==1.4.2
+numpy==1.21.5
+requests==2.27.1
