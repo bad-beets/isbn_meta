@@ -764,6 +764,14 @@ def dimensions(isbn: str,
                     res[i] = metric.metric_conversion(m[i]['dimensions'])
                 except KeyError:
                     res[i] = None
+            elif i == 'isbndb':
+                try:
+                    i_res: dict = {}
+                    i_res[i] = m[i]['dimensions']
+                    res[i] = { k:v for (k,v) in map(lambda x: x.split(': '),
+                                                    i_res[i].split(', ')) }
+                except KeyError:
+                    res[i] = None
             else:
                 try:
                     res[i] = m[i]['dimensions']
@@ -801,7 +809,7 @@ def width(isbn: str,
             if i == 'gobo':
                 res[i] = res[i]['width']
             elif i == 'isbndb':
-                res[i] = res[i].split(',')[1].split(':')[1][1:]
+                res[i] = res[i]['Length']
         else:
             res[i] = None
     return res
@@ -834,7 +842,7 @@ def height(isbn: str,
             if i == 'gobo':
                 res[i] = res[i]['height']
             elif i == 'isbndb':
-                res[i] = res[i].split(',')[0].split(':')[1][1:]
+                res[i] = res[i]['Height']
         else:
             res[i] = None
     return res
@@ -867,7 +875,7 @@ def thickness(isbn: str,
             if i == 'gobo':
                 res[i] = res[i]['thickness']
             elif i == 'isbndb':
-                res[i] = res[i].split(',')[3].split(':')[1][1:]
+                res[i] = res[i]['Width']
         else:
             res[i] = None
     return res
@@ -896,7 +904,7 @@ def weight(isbn: str,
 
     res: dict = dimensions(isbn)
     if res['isbndb']:
-        res['isbndb'] = res['isbndb'].split(',')[2].split(':')[1][1:]
+        res['isbndb'] = res['isbndb']['Weight']
     return {'isbndb': res['isbndb']}
 
 

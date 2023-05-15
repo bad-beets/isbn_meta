@@ -4,7 +4,8 @@ import log_setup
 import field_trans
 import choose
 import pandas as pd
-
+from typing import Union
+from pathlib import Path
 
 def import_csv(path: str) -> pd.core.frame.DataFrame:
     """Imports a csv containing items with ISBN data
@@ -21,6 +22,8 @@ def import_csv(path: str) -> pd.core.frame.DataFrame:
     """
     return pd.read_csv(path)
 
+def import_json(path_or_buf: Union[str, Path]) -> pd.core.frame.DataFrame:
+    pass
 
 def check_fields(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
     """Checks a dataframe for the metadata fields we expect from field_trans
