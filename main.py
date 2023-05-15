@@ -23,7 +23,19 @@ def import_csv(path: str) -> pd.core.frame.DataFrame:
     return pd.read_csv(path)
 
 def import_json(path_or_buf: Union[str, Path]) -> pd.core.frame.DataFrame:
-    pass
+    """Imports a csv containing items with ISBN data
+
+    Parameters
+    ----------
+    path_or_buf : Union[str, Path]
+        the path to the file containg the json or a string
+
+    Returns
+    -------
+    pd.core.frame.DataFrame
+        A pandas dataframe representation of the json
+    """
+    return pd.read_json(path_or_buf).rename(columns={'isbns': 'product_isbn'})
 
 def check_fields(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
     """Checks a dataframe for the metadata fields we expect from field_trans
@@ -42,6 +54,7 @@ def check_fields(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
     for i in field_trans.fields:
         if i not in df.columns:
             res[i] = pd.Series()
+    res['product_isbn'] = res['product_isbn'].astype(str)
     return res
 
 
@@ -101,6 +114,27 @@ def export_csv(df: pd.core.frame.DataFrame, path: str) -> None:
     """
     df.to_csv(path, index=False)
 
+def export_json(df: pd.core.frame.DataFrame, path: str) -> None:
+    """Exports a json file from a pandas dataframe
+
+    Parameters
+    ----------
+    df : pd.core.frame.DataFrame
+        a pandas dataframe to be exported
+    path : str
+        the path where the json file will be written
+
+    Returns
+    -------
+    None
+    """
+    res = df.rename(columns=lambda x: x.replace("product_", ""))
+    res_str = res.to_json(orient="records")
+    res_str = '{0} {1} {2} {3}'.format('{', '"products":', res_str, '}')
+    f = open(path, 'a')
+    f.write(res_str)
+    f.close()
+
 def csv_to_csv(read_path: str, write_path: str) -> None:
     """Reads a csv from read_path and writes a csv to
     write_path with the fields from field_trans populated
@@ -119,6 +153,26 @@ def csv_to_csv(read_path: str, write_path: str) -> None:
     """
     export_csv(set_products(check_fields(import_csv(read_path))),
                write_path)
+    return None
+
+def json_to_json(read_path: str, write_path: str) -> None:
+    """Reads a csv from read_path and writes a csv to
+    write_path with the fields from field_trans populated
+    with metadata from the api sources
+
+    Parameters
+    ----------
+    read_path : str
+        The path of the csv to be read
+    write_path : str
+        the path where the csv file will be written
+
+    Returns
+    -------
+    None
+    """
+    export_json(set_products(check_fields(import_json(read_path))),
+                write_path)
     return None
 
 # sparse test code; plan to write more, but you should be able to glean
